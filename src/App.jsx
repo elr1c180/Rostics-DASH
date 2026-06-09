@@ -52,6 +52,102 @@ const periods = ["Все периоды", "Будни", "Выходные"];
 const slots = ["Все слоты", "Утро", "Час-пик", "Вечер"];
 const emptyDashboardData = { restaurants: [], records: [], months: [], monthShort: [], meta: {} };
 
+function mockNumber(seed, min, max) {
+  const value = Math.sin(seed * 12.9898) * 43758.5453;
+  return min + (value - Math.floor(value)) * (max - min);
+}
+
+function createMockDashboardData() {
+  const months = ["апрель 2026", "май 2026", "июнь 2026"];
+  const monthShort = ["апр", "май", "июн"];
+  const restaurantNames = {
+    rostics: ["Ростик’с Арбат", "Ростик’с ВДНХ", "Ростик’с Сургут"],
+    tasty: ["ВиТ Тверская", "ВиТ Иваново", "ВиТ Макси"],
+    bk: ["Бургер Кинг Метрополис", "Бургер Кинг Евролэнд", "Бургер Кинг ВДНХ"],
+  };
+  const restaurants = brandKeys.flatMap((brand, brandIndex) =>
+    restaurantNames[brand].map((name, index) => ({
+      id: brandIndex * 10 + index + 1,
+      name,
+      brand,
+      city: index === 0 ? "Москва" : index === 1 ? "Иваново" : "Сургут",
+      type: "Ресторан",
+    })),
+  );
+  const issues = [
+    "Грязный зал/туалет",
+    "Долгое ожидание",
+    "Невкусная еда (несвежая, холодная)",
+    "Невежливый или безразличный персонал",
+    "Неработающее оборудование (терминалы, свет)",
+  ];
+  const comparisonAnswers = ["rostics", "tasty", "bk", "same"];
+  const records = [];
+
+  restaurants.forEach((restaurant, restaurantIndex) => {
+    months.forEach((month, monthIndex) => {
+      for (let visit = 0; visit < 4; visit += 1) {
+        const seed = restaurant.id * 100 + monthIndex * 10 + visit;
+        const brandBoost = restaurant.brand === "rostics" ? 2 : restaurant.brand === "tasty" ? 0 : 4;
+        const paired = visit < 2;
+        const issueIndex = Math.floor(mockNumber(seed + 7, 0, issues.length));
+        const hasIssue = mockNumber(seed + 8, 0, 1) > 0.55;
+        const comparison = {};
+
+        Object.keys(COMPARISON_LABELS).forEach((key, keyIndex) => {
+          comparison[key] = paired
+            ? comparisonAnswers[Math.floor(mockNumber(seed + keyIndex + 20, 0, comparisonAnswers.length))]
+            : null;
+        });
+
+        records.push({
+          checkNumber: records.length + 1,
+          restaurantId: restaurant.id,
+          restaurantName: restaurant.name,
+          brand: restaurant.brand,
+          city: restaurant.city,
+          type: restaurant.type,
+          month,
+          monthShort: monthShort[monthIndex],
+          week: `${visit + 1} нед`,
+          period: visit % 3 === 0 ? "Выходные" : "Будни",
+          slot: slots[(visit % 3) + 1],
+          cleanliness: Number(mockNumber(seed + 1, 52 + brandBoost, 82 + brandBoost).toFixed(1)),
+          personnel: Number(mockNumber(seed + 2, 66 + brandBoost, 91 + brandBoost).toFixed(1)),
+          food: Number(mockNumber(seed + 3, 82 + brandBoost, 99).toFixed(1)),
+          checks: 1,
+          wait: mockNumber(seed + 4, 0, 1) > 0.65
+            ? "более 5 минут"
+            : mockNumber(seed + 5, 0, 1) > 0.12
+              ? "до 5 минут"
+              : "Посещал ресторан в период низкой загрузки",
+          mood: mockNumber(seed + 6, 0, 1) > 0.45
+            ? "Положительное, хочется вернуться"
+            : mockNumber(seed + 9, 0, 1) > 0.25
+              ? "Нейтральное, просто поел"
+              : "Негативное, оставило осадок",
+          npsScore: Math.max(1, Math.min(10, Math.round(mockNumber(seed + 10, 5, 11)))),
+          criticalIssues: hasIssue ? [issues[issueIndex]] : ["Замечаний нет"],
+          comparison,
+          isPaired: paired,
+        });
+      }
+    });
+  });
+
+  return {
+    restaurants,
+    records,
+    months,
+    monthShort,
+    meta: {
+      questionnaireId: 278,
+      generatedAt: new Date().toISOString(),
+      mock: true,
+    },
+  };
+}
+
 function normalizeDashboardData(data) {
   const source = data && typeof data === "object" ? data : emptyDashboardData;
   return {
@@ -253,7 +349,7 @@ function ComparisonChart({ data }) {
     <ResponsiveContainer width="100%" height={300}>
       <BarChart data={data} layout="vertical" margin={{ top: 4, right: 10, left: 45, bottom: 0 }}>
         <CartesianGrid strokeDasharray="4 4" stroke={COLORS.grid} horizontal={false} />
-        <XAxis type="number" domain={[0, 100]} tickFormatter={(value) => `${value}%`} tick={{ fontSize: 11 }} />
+        <XAxis type="number" domain={[0, 100]} ticks={[0, 30, 60, 100]} allowDataOverflow tickFormatter={(value) => `${value}%`} tick={{ fontSize: 11 }} />
         <YAxis type="category" dataKey="metric" width={135} tick={{ fontSize: 11, fill: COLORS.text, fontWeight: 700 }} axisLine={false} tickLine={false} />
         <Tooltip content={<ChartTooltip />} />
         <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
@@ -303,7 +399,8 @@ export default function RosticsDashboard() {
       })
       .catch((error) => {
         if (error.name === "AbortError") return;
-        setDataStatus("error");
+        setDashboardData(normalizeDashboardData(createMockDashboardData()));
+        setDataStatus("mock");
         setDataError(error.message);
       });
     return () => controller.abort();
@@ -460,8 +557,12 @@ export default function RosticsDashboard() {
     </>
   );
 
-  const statusLabel = dataStatus === "ready" ? "База данных" : dataStatus === "loading" ? "Загрузка" : "Ошибка данных";
-  const statusClass = dataStatus === "ready" ? "bg-green-50 text-green-700" : dataStatus === "loading" ? "bg-blue-50 text-blue-700" : "bg-red-50 text-red-700";
+  const statusLabel = dataStatus === "ready" ? "База данных" : dataStatus === "loading" ? "Загрузка" : "Демо-данные";
+  const statusClass = dataStatus === "ready"
+    ? "bg-green-50 text-green-700"
+    : dataStatus === "loading"
+      ? "bg-blue-50 text-blue-700"
+      : "bg-amber-50 text-amber-700";
 
   return (
     <main className="min-h-screen p-3 sm:p-5" style={{ background: COLORS.page }}>
