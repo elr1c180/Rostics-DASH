@@ -1,0 +1,213 @@
+{
+  "generatedAt": "2026-05-28T09:32:36.834Z",
+  "filters": {
+    "schema": "rostics",
+    "wave_id": [
+      795,
+      797,
+      806,
+      819
+    ],
+    "parent_questionnaire_id": [
+      277,
+      278,
+      279
+    ],
+    "status": [
+      3
+    ]
+  },
+  "summary": [
+    {
+      "wave_id": 795,
+      "parent_questionnaire_id": 277,
+      "questionnaire_name": "Rostiсs старая анкеты",
+      "status": 3,
+      "status_name": "Опубликована",
+      "tasks": 41,
+      "shops": 7
+    },
+    {
+      "wave_id": 797,
+      "parent_questionnaire_id": 278,
+      "questionnaire_name": "Rostiсs",
+      "status": 3,
+      "status_name": "Опубликована",
+      "tasks": 6,
+      "shops": 2
+    },
+    {
+      "wave_id": 806,
+      "parent_questionnaire_id": 278,
+      "questionnaire_name": "Rostiсs",
+      "status": 3,
+      "status_name": "Опубликована",
+      "tasks": 169,
+      "shops": 18
+    }
+  ],
+  "shops": [
+    {
+      "wave_id": 795,
+      "shop_id": 371,
+      "shop_n": "Ресторан Евролэнд Иваново",
+      "tasks": 9
+    },
+    {
+      "wave_id": 795,
+      "shop_id": 671,
+      "shop_n": "Ресторан Макси Смоленск",
+      "tasks": 5
+    },
+    {
+      "wave_id": 795,
+      "shop_id": 771,
+      "shop_n": "Ресторан Маяковская Москва",
+      "tasks": 10
+    },
+    {
+      "wave_id": 795,
+      "shop_id": 772,
+      "shop_n": "Ресторан Народного ополчения Москва",
+      "tasks": 5
+    },
+    {
+      "wave_id": 795,
+      "shop_id": 773,
+      "shop_n": "Ресторан ВДНХ Москва",
+      "tasks": 3
+    },
+    {
+      "wave_id": 795,
+      "shop_id": 774,
+      "shop_n": "Ресторан Войковская Москва",
+      "tasks": 8
+    },
+    {
+      "wave_id": 795,
+      "shop_id": 861,
+      "shop_n": "Ресторан Югорский Сургут",
+      "tasks": 1
+    },
+    {
+      "wave_id": 797,
+      "shop_id": 111,
+      "shop_n": "Флагман ВиТ",
+      "tasks": 3
+    },
+    {
+      "wave_id": 797,
+      "shop_id": 222,
+      "shop_n": "Флагман Ростикс",
+      "tasks": 3
+    },
+    {
+      "wave_id": 806,
+      "shop_id": 111,
+      "shop_n": "Флагман ВиТ",
+      "tasks": 15
+    },
+    {
+      "wave_id": 806,
+      "shop_id": 222,
+      "shop_n": "Флагман Ростикс",
+      "tasks": 15
+    },
+    {
+      "wave_id": 806,
+      "shop_id": 223,
+      "shop_n": "ВиТ на Пушкинской",
+      "tasks": 11
+    },
+    {
+      "wave_id": 806,
+      "shop_id": 224,
+      "shop_n": "ВиТ на Народного Ополчения",
+      "tasks": 2
+    },
+    {
+      "wave_id": 806,
+      "shop_id": 225,
+      "shop_n": "Бургер Кинг ВДНХ",
+      "tasks": 11
+    },
+    {
+      "wave_id": 806,
+      "shop_id": 226,
+      "shop_n": "ВиТ Метрополис",
+      "tasks": 7
+    },
+    {
+      "wave_id": 806,
+      "shop_id": 227,
+      "shop_n": "ВиТ Макси",
+      "tasks": 10
+    },
+    {
+      "wave_id": 806,
+      "shop_id": 228,
+      "shop_n": "Бургер Кинг Евролэнд",
+      "tasks": 12
+    },
+    {
+      "wave_id": 806,
+      "shop_id": 229,
+      "shop_n": "Бургер Кинг Народного ополчения",
+      "tasks": 5
+    },
+    {
+      "wave_id": 806,
+      "shop_id": 230,
+      "shop_n": "Бургер Кинг Метрополис",
+      "tasks": 3
+    },
+    {
+      "wave_id": 806,
+      "shop_id": 231,
+      "shop_n": "ВиТ проспект Мира",
+      "tasks": 6
+    },
+    {
+      "wave_id": 806,
+      "shop_id": 371,
+      "shop_n": "Ресторан Евролэнд Иваново",
+      "tasks": 12
+    },
+    {
+      "wave_id": 806,
+      "shop_id": 671,
+      "shop_n": "Ресторан Макси Смоленск",
+      "tasks": 10
+    },
+    {
+      "wave_id": 806,
+      "shop_id": 771,
+      "shop_n": "Ресторан Маяковская Москва",
+      "tasks": 11
+    },
+    {
+      "wave_id": 806,
+      "shop_id": 772,
+      "shop_n": "Ресторан Народного ополчения Москва",
+      "tasks": 9
+    },
+    {
+      "wave_id": 806,
+      "shop_id": 773,
+      "shop_n": "Ресторан ВДНХ Москва",
+      "tasks": 11
+    },
+    {
+      "wave_id": 806,
+      "shop_id": 774,
+      "shop_n": "Ресторан Войковская Москва",
+      "tasks": 7
+    },
+    {
+      "wave_id": 806,
+      "shop_id": 861,
+      "shop_n": "Ресторан Югорский Сургут",
+      "tasks": 12
+    }
+  ]
+}

@@ -1,185 +1,138 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  LineChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  LabelList,
+  Legend,
   Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-  Legend,
-  BarChart,
-  Bar,
-  Cell,
-  AreaChart,
-  Area,
-  PieChart,
-  Pie,
 } from "recharts";
-import {
-  ChevronDown,
-  Store,
-  CalendarDays,
-  Clock3,
-  Building2,
-  Search,
-  X,
-  Menu,
-  SlidersHorizontal,
-} from "lucide-react";
+import { CalendarDays, ChevronDown, Clock3, Search, SlidersHorizontal, Store, X } from "lucide-react";
 
 const COLORS = {
   page: "#F7F6F2",
-  card: "#FFFFFF",
-  border: "rgba(15, 23, 42, 0.08)",
   text: "#101827",
   muted: "#6B7280",
   red: "#E30613",
-  orange: "#FF7A00",
+  green: "#168A45",
   yellow: "#F5A400",
-  green: "#128A43",
   blue: "#2563EB",
+  gray: "#94A3B8",
   grid: "#ECECEC",
 };
 
 const BRANDS = {
-  rostics: { name: "Ростик’с", short: "R", color: COLORS.red, bg: "#FFF1F1" },
-  tasty: { name: "Вкусно — и точка", short: "ВиТ", color: COLORS.orange, bg: "#FFF4E8" },
-  bk: { name: "Бургер Кинг", short: "BK", color: COLORS.yellow, bg: "#FFF7DC" },
+  rostics: { name: "Ростик’с", short: "R", color: COLORS.red, badge: "bg-red-600" },
+  tasty: { name: "Вкусно — и точка", short: "ВиТ", color: COLORS.green, badge: "bg-green-700" },
+  bk: { name: "Бургер Кинг", short: "BK", color: COLORS.yellow, badge: "bg-yellow-400 text-red-700" },
 };
 
+const BLOCKS = [
+  { key: "cleanliness", name: "Чистота", detail: "Зал и туалет" },
+  { key: "personnel", name: "Персонал", detail: "Гостеприимство" },
+  { key: "food", name: "Еда", detail: "Блюда" },
+];
+const COMPARISON_LABELS = {
+  speed: "Быстрее обслужили",
+  taste: "Вкуснее еда",
+  cleanliness: "Чище туалет",
+  friendliness: "Дружелюбнее",
+  choice: "Итоговый выбор",
+};
 const brandKeys = Object.keys(BRANDS);
-const months = ["декабрь 2023", "январь 2024", "февраль 2024", "март 2024", "апрель 2024", "май 2024"];
-const monthShort = ["дек", "янв", "фев", "мар", "апр", "май"];
 const periods = ["Все периоды", "Будни", "Выходные"];
 const slots = ["Все слоты", "Утро", "Час-пик", "Вечер"];
+const emptyDashboardData = { restaurants: [], records: [], months: [], monthShort: [], meta: {} };
 
-const restaurants = Array.from({ length: 30 }, (_, i) => {
-  const brand = brandKeys[i % 3];
-  const city = ["Москва", "СПб", "Казань", "Екатеринбург", "Новосибирск", "Самара"][i % 6];
-  const district = ["Центр", "Север", "Юг", "Запад", "Восток"][i % 5];
+function normalizeDashboardData(data) {
+  const source = data && typeof data === "object" ? data : emptyDashboardData;
   return {
-    id: i + 1,
-    name: `${BRANDS[brand].name} ${city} ${district} #${String(i + 1).padStart(2, "0")}`,
-    brand,
-    city,
-    type: i % 2 === 0 ? "Фудкорт" : "Отдельный ресторан",
+    restaurants: Array.isArray(source.restaurants)
+      ? source.restaurants.map((restaurant) => ({
+          ...restaurant,
+          name: String(restaurant?.name || ""),
+        }))
+      : [],
+    records: Array.isArray(source.records)
+      ? source.records.map((record) => ({
+          ...record,
+          restaurantName: String(record?.restaurantName || ""),
+          wait: String(record?.wait || ""),
+          mood: String(record?.mood || ""),
+          checks: Number(record.checks || 1),
+          cleanliness: record.cleanliness == null ? null : Number(record.cleanliness),
+          personnel: record.personnel == null ? null : Number(record.personnel),
+          food: record.food == null ? null : Number(record.food),
+          npsScore: record.npsScore == null ? null : Number(record.npsScore),
+          criticalIssues: Array.isArray(record.criticalIssues)
+            ? record.criticalIssues.map((issue) => String(issue || "")).filter(Boolean)
+            : [],
+          comparison: record.comparison && typeof record.comparison === "object"
+            ? record.comparison
+            : {},
+        }))
+      : [],
+    months: Array.isArray(source.months) ? source.months : [],
+    monthShort: Array.isArray(source.monthShort) ? source.monthShort : [],
+    meta: source.meta || {},
   };
-});
-
-function hashScore(seed, min, max) {
-  const x = Math.sin(seed * 999) * 10000;
-  return Number((min + (x - Math.floor(x)) * (max - min)).toFixed(1));
 }
-
-const records = restaurants.flatMap((restaurant) => {
-  return months.flatMap((month, monthIndex) => {
-    return [1, 2, 3, 4].flatMap((week) => {
-      return ["Будни", "Выходные"].flatMap((period) => {
-        return ["Утро", "Час-пик", "Вечер"].map((slot, slotIndex) => {
-          const brandBase = restaurant.brand === "rostics" ? 89 : restaurant.brand === "tasty" ? 84 : 81;
-          const monthBoost = monthIndex * 0.9;
-          const periodPenalty = period === "Выходные" ? -1.7 : 0;
-          const slotPenalty = slot === "Час-пик" ? -2.3 : slot === "Вечер" ? -1.1 : 1.2;
-          const noise = hashScore(restaurant.id * 10 + monthIndex * 3 + week + slotIndex, -2.2, 2.2);
-          const cleanliness = Math.max(55, Math.min(99, brandBase + monthBoost + periodPenalty + slotPenalty + noise));
-          const survey = Math.max(42, Math.min(96, cleanliness - hashScore(restaurant.id + week + slotIndex, 9, 17)));
-          const checks = Math.round(hashScore(restaurant.id + monthIndex + week + slotIndex, 8, 34));
-          return {
-            restaurantId: restaurant.id,
-            restaurantName: restaurant.name,
-            brand: restaurant.brand,
-            city: restaurant.city,
-            type: restaurant.type,
-            month,
-            monthShort: monthShort[monthIndex],
-            week: `${week} нед`,
-            period,
-            slot,
-            cleanliness,
-            survey,
-            checks,
-            hall: Math.min(99, cleanliness + hashScore(restaurant.id + week, -1, 3)),
-            wc: Math.max(50, cleanliness + hashScore(restaurant.id + slotIndex, -7, 1)),
-            kitchen: Math.min(99, cleanliness + hashScore(restaurant.id + monthIndex, 0, 4)),
-            facade: Math.max(50, cleanliness + hashScore(restaurant.id + week + monthIndex, -5, 2)),
-          };
-        });
-      });
-    });
-  });
-});
 
 function avg(values) {
-  if (!values.length) return 0;
-  return Number((values.reduce((sum, v) => sum + v, 0) / values.length).toFixed(1));
+  const valid = values.filter(Number.isFinite);
+  if (!valid.length) return null;
+  return Number((valid.reduce((sum, value) => sum + value, 0) / valid.length).toFixed(1));
 }
 
-function formatPct(v) {
-  return `${Number(v || 0).toFixed(1)}%`;
+function formatPct(value) {
+  return Number.isFinite(value) ? `${value.toFixed(1)}%` : "—";
 }
 
-function LogoBadge({ brand, size = "normal" }) {
-  const b = BRANDS[brand];
-  const isLarge = size === "large";
+function nps(values) {
+  const valid = values.filter((value) => Number.isFinite(value) && value >= 1 && value <= 10);
+  if (!valid.length) return null;
+  const promoters = valid.filter((value) => value >= 9).length;
+  const detractors = valid.filter((value) => value <= 6).length;
+  return Math.round(((promoters - detractors) / valid.length) * 100);
+}
 
-  if (brand === "rostics") {
-    return (
-      <div className="flex items-center gap-3">
-        <div className={`${isLarge ? "h-16 w-16 rounded-2xl" : "h-9 w-9 rounded-xl"} flex items-center justify-center bg-red-600 text-white shadow-sm`}>
-          <span className={isLarge ? "font-serif text-4xl font-black italic" : "font-serif text-xl font-black italic"}>R</span>
-        </div>
-        {isLarge && (
-          <div>
-            <div className="text-3xl font-black tracking-tight text-slate-950">РОСТИК’С</div>
-            <div className="text-lg font-medium text-slate-500">Чистота и анкетирование</div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (brand === "tasty") {
-    return (
-      <div className="flex items-center gap-3">
-        <div className={`${isLarge ? "h-16 w-16 rounded-2xl" : "h-9 w-9 rounded-xl"} flex items-center justify-center bg-orange-500 text-white shadow-sm`}>
-          <span className={isLarge ? "text-xl font-black" : "text-xs font-black"}>ВиТ</span>
-        </div>
-        {isLarge && (
-          <div>
-            <div className="text-3xl font-black tracking-tight text-slate-950">ВКУСНО — И ТОЧКА</div>
-            <div className="text-lg font-medium text-slate-500">Конкурентный бенчмарк</div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
+function LogoBadge({ brand, large = false }) {
+  const item = BRANDS[brand];
   return (
     <div className="flex items-center gap-3">
-      <div className={`${isLarge ? "h-16 w-16 rounded-2xl" : "h-9 w-9 rounded-xl"} flex items-center justify-center bg-yellow-400 text-red-700 shadow-sm ring-2 ring-red-600/20`}>
-        <span className={isLarge ? "text-2xl font-black" : "text-sm font-black"}>BK</span>
+      <div className={`${large ? "h-16 w-16 rounded-2xl text-xl" : "h-9 w-9 rounded-xl text-xs"} ${item.badge} flex shrink-0 items-center justify-center font-black text-white shadow-sm`}>
+        {item.short}
       </div>
-      {isLarge && (
+      {large && (
         <div>
-          <div className="text-3xl font-black tracking-tight text-slate-950">БУРГЕР КИНГ</div>
-          <div className="text-lg font-medium text-slate-500">Конкурентный бенчмарк</div>
+          <div className="text-3xl font-black tracking-tight text-slate-950">РОСТИК’С</div>
+          <div className="text-base font-semibold text-slate-500">Качество визита и конкурентный анализ</div>
         </div>
       )}
     </div>
   );
 }
 
-function Card({ title, children, className = "" }) {
+function Card({ title, subtitle, children, className = "" }) {
   return (
-    <section className={`rounded-2xl border bg-white p-4 shadow-sm ${className}`} style={{ borderColor: COLORS.border }}>
-      {title && <h3 className="mb-3 text-base font-black tracking-tight text-slate-950">{title}</h3>}
+    <section className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${className}`}>
+      {title && <h3 className="text-base font-black tracking-tight text-slate-950">{title}</h3>}
+      {subtitle && <p className="mb-3 mt-1 text-xs font-semibold text-slate-500">{subtitle}</p>}
+      {!subtitle && title && <div className="mb-3" />}
       {children}
     </section>
   );
 }
 
-function SelectFilter({ icon: Icon, label, value, options, onChange, wide }) {
+function SelectFilter({ icon: Icon, label, value, options, onChange, wide = false }) {
   return (
     <label className={wide ? "min-w-[250px]" : "min-w-[155px]"}>
       <div className="mb-1.5 text-xs font-bold text-slate-500">{label}</div>
@@ -187,8 +140,8 @@ function SelectFilter({ icon: Icon, label, value, options, onChange, wide }) {
         <Icon size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <select
           value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-10 w-full appearance-none rounded-xl border border-slate-200 bg-white py-0 pl-9 pr-9 text-sm font-semibold text-slate-900 shadow-sm outline-none transition hover:border-slate-300 focus:border-red-300"
+          onChange={(event) => onChange(event.target.value)}
+          className="h-10 w-full appearance-none rounded-xl border border-slate-200 bg-white py-0 pl-9 pr-9 text-sm font-semibold text-slate-900 shadow-sm outline-none focus:border-red-300"
         >
           {options.map((option) => (
             <option key={option.value || option} value={option.value || option}>{option.label || option}</option>
@@ -201,7 +154,7 @@ function SelectFilter({ icon: Icon, label, value, options, onChange, wide }) {
 }
 
 function BrandTabs({ value, onChange }) {
-  const items = [{ key: "all", name: "Все бренды" }, ...Object.entries(BRANDS).map(([key, b]) => ({ key, name: b.name }))];
+  const items = [{ key: "all", name: "Все бренды" }, ...brandKeys.map((key) => ({ key, name: BRANDS[key].name }))];
   return (
     <div className="flex gap-2 overflow-x-auto rounded-2xl bg-slate-100 p-1">
       {items.map((item) => {
@@ -223,95 +176,89 @@ function BrandTabs({ value, onChange }) {
   );
 }
 
-function KpiCard({ label, value, delta, brand, hint }) {
-  const color = brand === "all" ? COLORS.text : BRANDS[brand].color;
-  const isDown = String(delta).startsWith("↓");
+function KpiCard({ label, value, detail, color = COLORS.text }) {
   return (
     <Card>
-      <div className="mb-3 flex items-start justify-between gap-2">
-        <div className="text-xs font-bold leading-tight text-slate-500">{label}</div>
-        {brand !== "all" && <LogoBadge brand={brand} />}
-      </div>
-      <div className="text-3xl font-black tracking-tight" style={{ color }}>{value}</div>
-      <div className="mt-2 flex items-center justify-between gap-2 text-xs">
-        <span className="truncate font-bold text-slate-500">{hint}</span>
-        {delta && <span className={`shrink-0 font-black ${isDown ? "text-red-600" : "text-green-700"}`}>{delta}</span>}
-      </div>
+      <div className="text-xs font-bold text-slate-500">{label}</div>
+      <div className="mt-3 text-3xl font-black tracking-tight" style={{ color }}>{value}</div>
+      <div className="mt-2 text-xs font-bold text-slate-500">{detail}</div>
     </Card>
   );
 }
 
-function TooltipRu({ active, payload, label }) {
+function ChartTooltip({ active, payload, label, percent = true }) {
   if (!active || !payload?.length) return null;
-  const names = { rostics: "Ростик’с", tasty: "Вкусно — и точка", bk: "Бургер Кинг", value: "Значение", cleanliness: "Чистота", survey: "Анкеты", checks: "Проверки" };
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-xl">
       <div className="mb-2 font-black text-slate-900">{label}</div>
-      {payload.map((p) => (
-        <div key={p.dataKey} className="flex items-center justify-between gap-5 font-bold" style={{ color: p.color }}>
-          <span>{names[p.dataKey] || p.name}</span>
-          <span>{p.dataKey === "checks" ? p.value : `${Number(p.value).toFixed(1)}%`}</span>
+      {payload.map((item) => (
+        <div key={`${item.dataKey}-${item.name}`} className="flex items-center justify-between gap-5 font-bold" style={{ color: item.color }}>
+          <span>{item.name}</span>
+          <span>{percent ? `${Number(item.value || 0).toFixed(1)}%` : item.value}</span>
         </div>
       ))}
     </div>
   );
 }
 
-function TrendChart({ data, xKey, mode = "line" }) {
-  const Chart = mode === "area" ? AreaChart : LineChart;
+function BrandBlockChart({ data }) {
   return (
-    <ResponsiveContainer width="100%" height={230}>
-      <Chart data={data} margin={{ top: 8, right: 14, left: -20, bottom: 0 }}>
+    <ResponsiveContainer width="100%" height={270}>
+      <BarChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
         <CartesianGrid strokeDasharray="4 4" stroke={COLORS.grid} vertical={false} />
-        <XAxis dataKey={xKey} tick={{ fontSize: 11, fill: COLORS.muted }} axisLine={false} tickLine={false} />
-        <YAxis domain={[40, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11, fill: COLORS.muted }} axisLine={false} tickLine={false} />
-        <Tooltip content={<TooltipRu />} />
+        <XAxis dataKey="block" tick={{ fontSize: 11, fill: COLORS.muted }} axisLine={false} tickLine={false} />
+        <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} tick={{ fontSize: 11, fill: COLORS.muted }} axisLine={false} tickLine={false} />
+        <Tooltip content={<ChartTooltip />} />
         <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-        {mode === "area" ? (
-          <>
-            <Area type="monotone" dataKey="rostics" name="Ростик’с" stroke={COLORS.red} fill="#E3061318" strokeWidth={3} />
-            <Area type="monotone" dataKey="tasty" name="Вкусно — и точка" stroke={COLORS.orange} fill="#FF7A0014" strokeWidth={3} />
-            <Area type="monotone" dataKey="bk" name="Бургер Кинг" stroke={COLORS.yellow} fill="#F5A40018" strokeWidth={3} />
-          </>
-        ) : (
-          <>
-            <Line type="monotone" dataKey="rostics" name="Ростик’с" stroke={COLORS.red} strokeWidth={3} dot={{ r: 3 }} />
-            <Line type="monotone" dataKey="tasty" name="Вкусно — и точка" stroke={COLORS.orange} strokeWidth={3} dot={{ r: 3 }} />
-            <Line type="monotone" dataKey="bk" name="Бургер Кинг" stroke={COLORS.yellow} strokeWidth={3} dot={{ r: 3 }} />
-          </>
-        )}
-      </Chart>
-    </ResponsiveContainer>
-  );
-}
-
-function BarCompareChart({ data, xKey }) {
-  return (
-    <ResponsiveContainer width="100%" height={235}>
-      <BarChart data={data} margin={{ top: 6, right: 4, left: -20, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="4 4" stroke={COLORS.grid} vertical={false} />
-        <XAxis dataKey={xKey} tick={{ fontSize: 11, fill: COLORS.muted }} axisLine={false} tickLine={false} />
-        <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11, fill: COLORS.muted }} axisLine={false} tickLine={false} />
-        <Tooltip content={<TooltipRu />} />
-        <Legend iconType="rect" wrapperStyle={{ fontSize: 12 }} />
-        <Bar dataKey="rostics" name="Ростик’с" radius={[6, 6, 0, 0]} fill={COLORS.red} />
-        <Bar dataKey="tasty" name="Вкусно — и точка" radius={[6, 6, 0, 0]} fill={COLORS.orange} />
-        <Bar dataKey="bk" name="Бургер Кинг" radius={[6, 6, 0, 0]} fill={COLORS.yellow} />
+        {brandKeys.map((key) => <Bar key={key} dataKey={key} name={BRANDS[key].name} fill={BRANDS[key].color} radius={[5, 5, 0, 0]} />)}
       </BarChart>
     </ResponsiveContainer>
   );
 }
 
-function RankingChart({ data }) {
+function TrendChart({ data }) {
   return (
-    <ResponsiveContainer width="100%" height={230}>
-      <BarChart data={data} layout="vertical" margin={{ top: 6, right: 36, left: 30, bottom: 0 }}>
-        <XAxis type="number" domain={[0, 100]} hide />
-        <YAxis type="category" dataKey="name" width={118} tick={{ fontSize: 12, fill: COLORS.text, fontWeight: 700 }} axisLine={false} tickLine={false} />
-        <Tooltip content={<TooltipRu />} />
-        <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={24}>
-          {data.map((d) => <Cell key={d.name} fill={d.color} />)}
+    <ResponsiveContainer width="100%" height={270}>
+      <LineChart data={data} margin={{ top: 8, right: 12, left: -20, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="4 4" stroke={COLORS.grid} vertical={false} />
+        <XAxis dataKey="month" tick={{ fontSize: 11, fill: COLORS.muted }} axisLine={false} tickLine={false} />
+        <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} tick={{ fontSize: 11, fill: COLORS.muted }} axisLine={false} tickLine={false} />
+        <Tooltip content={<ChartTooltip />} />
+        <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+        {brandKeys.map((key) => (
+          <Line key={key} type="monotone" dataKey={key} name={BRANDS[key].name} stroke={BRANDS[key].color} strokeWidth={3} dot={{ r: 4 }} connectNulls />
+        ))}
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+function HorizontalBars({ data, color = COLORS.red, percent = true, height = 250 }) {
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 60, left: 40, bottom: 0 }}>
+        <XAxis type="number" domain={percent ? [0, 100] : [0, "dataMax"]} hide />
+        <YAxis type="category" dataKey="name" width={145} tick={{ fontSize: 11, fill: COLORS.text, fontWeight: 700 }} axisLine={false} tickLine={false} />
+        <Tooltip content={<ChartTooltip percent={percent} />} />
+        <Bar dataKey="value" name={percent ? "Доля" : "Проверки"} fill={color} radius={[0, 7, 7, 0]} barSize={22}>
+          <LabelList dataKey="value" position="right" formatter={(value) => percent ? `${Number(value).toFixed(1)}%` : value} style={{ fill: COLORS.text, fontSize: 11, fontWeight: 900 }} />
         </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+function ComparisonChart({ data }) {
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 10, left: 45, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="4 4" stroke={COLORS.grid} horizontal={false} />
+        <XAxis type="number" domain={[0, 100]} tickFormatter={(value) => `${value}%`} tick={{ fontSize: 11 }} />
+        <YAxis type="category" dataKey="metric" width={135} tick={{ fontSize: 11, fill: COLORS.text, fontWeight: 700 }} axisLine={false} tickLine={false} />
+        <Tooltip content={<ChartTooltip />} />
+        <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+        {brandKeys.map((key) => <Bar key={key} dataKey={key} stackId="comparison" name={BRANDS[key].name} fill={BRANDS[key].color} />)}
+        <Bar dataKey="same" stackId="comparison" name="Одинаково" fill={COLORS.gray} radius={[0, 6, 6, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -319,161 +266,178 @@ function RankingChart({ data }) {
 
 function DonutChart({ data }) {
   return (
-    <ResponsiveContainer width="100%" height={210}>
+    <ResponsiveContainer width="100%" height={230}>
       <PieChart>
-        <Pie data={data} dataKey="value" nameKey="name" innerRadius={58} outerRadius={82} paddingAngle={3}>
-          {data.map((d) => <Cell key={d.name} fill={d.color} />)}
+        <Pie data={data} dataKey="value" nameKey="name" innerRadius={58} outerRadius={86} paddingAngle={3}>
+          {data.map((item) => <Cell key={item.name} fill={item.color} />)}
         </Pie>
-        <Tooltip content={<TooltipRu />} />
+        <Tooltip content={<ChartTooltip percent={false} />} />
         <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
       </PieChart>
     </ResponsiveContainer>
   );
 }
 
-function SearchBox({ value, onChange }) {
-  return (
-    <div className="relative min-w-0 flex-1 md:max-w-xs">
-      <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="Поиск ресторана"
-        className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm font-semibold outline-none focus:border-red-300"
-      />
-    </div>
-  );
-}
-
 export default function RosticsDashboard() {
+  const [dashboardData, setDashboardData] = useState(emptyDashboardData);
+  const [dataStatus, setDataStatus] = useState("loading");
+  const [dataError, setDataError] = useState("");
   const [brand, setBrand] = useState("all");
   const [restaurantId, setRestaurantId] = useState("all");
-  const [month, setMonth] = useState("май 2024");
+  const [month, setMonth] = useState("Все месяцы");
   const [period, setPeriod] = useState("Все периоды");
   const [slot, setSlot] = useState("Все слоты");
   const [search, setSearch] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
-  const restaurantOptions = useMemo(() => {
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/rostics-dashboard-api", { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await response.text() || `HTTP ${response.status}`);
+        return response.json();
+      })
+      .then((data) => {
+        setDashboardData(normalizeDashboardData(data));
+        setDataStatus("ready");
+      })
+      .catch((error) => {
+        if (error.name === "AbortError") return;
+        setDataStatus("error");
+        setDataError(error.message);
+      });
+    return () => controller.abort();
+  }, []);
+
+  const { restaurants, records, months, monthShort, meta } = dashboardData;
+  const restaurantOptions = useMemo(() => [
+    { value: "all", label: "Все рестораны" },
+    ...restaurants
+      .filter((restaurant) => brand === "all" || restaurant.brand === brand)
+      .filter((restaurant) => restaurant.name.toLowerCase().includes(search.toLowerCase()))
+      .map((restaurant) => ({ value: String(restaurant.id), label: restaurant.name })),
+  ], [brand, restaurants, search]);
+
+  const matchesBaseFilters = (record, includeMonth = true) => {
+    if (brand !== "all" && record.brand !== brand) return false;
+    if (restaurantId !== "all" && record.restaurantId !== Number(restaurantId)) return false;
+    if (includeMonth && month !== "Все месяцы" && record.month !== month) return false;
+    if (period !== "Все периоды" && record.period !== period) return false;
+    if (slot !== "Все слоты" && record.slot !== slot) return false;
+    if (search && !record.restaurantName.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  };
+
+  const filtered = useMemo(
+    () => records.filter((record) => matchesBaseFilters(record)),
+    [brand, restaurantId, month, period, slot, search, records],
+  );
+
+  const blockAverages = Object.fromEntries(BLOCKS.map((block) => [block.key, avg(filtered.map((record) => record[block.key]))]));
+  const waitAnswered = filtered.filter((record) => record.wait);
+  const waitUnderFive = waitAnswered.length
+    ? (waitAnswered.filter((record) => record.wait.toLowerCase().includes("до 5")).length / waitAnswered.length) * 100
+    : null;
+  const currentNps = nps(filtered.map((record) => record.npsScore));
+
+  const moodData = useMemo(() => {
+    const counts = { positive: 0, neutral: 0, negative: 0 };
+    filtered.forEach((record) => {
+      const mood = String(record.mood || "").toLowerCase();
+      if (mood.includes("полож")) counts.positive += 1;
+      else if (mood.includes("нейтр")) counts.neutral += 1;
+      else if (mood.includes("негат")) counts.negative += 1;
+    });
     return [
-      { value: "all", label: "Все рестораны" },
-      ...restaurants
-        .filter((r) => brand === "all" || r.brand === brand)
-        .filter((r) => r.name.toLowerCase().includes(search.toLowerCase()))
-        .map((r) => ({ value: String(r.id), label: r.name })),
-    ];
-  }, [brand, search]);
-
-  const filtered = useMemo(() => {
-    return records.filter((r) => {
-      if (brand !== "all" && r.brand !== brand) return false;
-      if (restaurantId !== "all" && r.restaurantId !== Number(restaurantId)) return false;
-      if (month !== "Все месяцы" && r.month !== month) return false;
-      if (period !== "Все периоды" && r.period !== period) return false;
-      if (slot !== "Все слоты" && r.slot !== slot) return false;
-      if (search && !r.restaurantName.toLowerCase().includes(search.toLowerCase())) return false;
-      return true;
-    });
-  }, [brand, restaurantId, month, period, slot, search]);
-
-  const currentStats = useMemo(() => {
-    const brandsToShow = brand === "all" ? brandKeys : [brand];
-    const byBrand = brandsToShow.map((b) => {
-      const rows = filtered.filter((r) => r.brand === b);
-      return {
-        brand: b,
-        name: BRANDS[b].name,
-        color: BRANDS[b].color,
-        cleanliness: avg(rows.map((r) => r.cleanliness)),
-        survey: avg(rows.map((r) => r.survey)),
-        checks: rows.reduce((s, r) => s + r.checks, 0),
-        restaurants: new Set(rows.map((r) => r.restaurantId)).size,
-      };
-    });
-    return byBrand;
-  }, [filtered, brand]);
-
-  const trendByWeek = useMemo(() => {
-    return ["1 нед", "2 нед", "3 нед", "4 нед"].map((week) => {
-      const item = { week };
-      brandKeys.forEach((b) => {
-        const rows = filtered.filter((r) => r.brand === b && r.week === week);
-        item[b] = avg(rows.map((r) => r.cleanliness));
-      });
-      return item;
-    });
+      { name: "Положительное", value: counts.positive, color: COLORS.green },
+      { name: "Нейтральное", value: counts.neutral, color: COLORS.gray },
+      { name: "Негативное", value: counts.negative, color: COLORS.red },
+    ].filter((item) => item.value > 0);
   }, [filtered]);
 
-  const surveyByWeek = useMemo(() => {
-    return ["1 нед", "2 нед", "3 нед", "4 нед"].map((week) => {
-      const item = { week };
-      brandKeys.forEach((b) => {
-        const rows = filtered.filter((r) => r.brand === b && r.week === week);
-        item[b] = avg(rows.map((r) => r.survey));
-      });
-      return item;
+  const waitData = useMemo(() => {
+    const counts = new Map();
+    filtered.forEach((record) => {
+      if (!record.wait) return;
+      let label = "Низкая загрузка";
+      if (record.wait.toLowerCase().includes("до 5")) label = "До 5 минут";
+      else if (record.wait.toLowerCase().includes("более 5")) label = "Более 5 минут";
+      counts.set(label, (counts.get(label) || 0) + 1);
     });
+    const total = Array.from(counts.values()).reduce((sum, value) => sum + value, 0);
+    return Array.from(counts, ([name, value]) => ({ name, value: total ? Number(((value / total) * 100).toFixed(1)) : 0 }));
   }, [filtered]);
 
-  const trendByMonth = useMemo(() => {
-    return months.map((m, i) => {
-      const item = { month: monthShort[i] };
-      brandKeys.forEach((b) => {
-        const rows = records.filter((r) => {
-          if (brand !== "all" && r.brand !== brand) return false;
-          if (restaurantId !== "all" && r.restaurantId !== Number(restaurantId)) return false;
-          if (period !== "Все периоды" && r.period !== period) return false;
-          if (slot !== "Все слоты" && r.slot !== slot) return false;
-          if (search && !r.restaurantName.toLowerCase().includes(search.toLowerCase())) return false;
-          return r.brand === b && r.month === m;
-        });
-        item[b] = avg(rows.map((r) => r.cleanliness));
-      });
-      return item;
-    });
-  }, [brand, restaurantId, period, slot, search]);
-
-  const zoneData = useMemo(() => {
-    return [
-      { zone: "Зал", rostics: avg(filtered.filter((r) => r.brand === "rostics").map((r) => r.hall)), tasty: avg(filtered.filter((r) => r.brand === "tasty").map((r) => r.hall)), bk: avg(filtered.filter((r) => r.brand === "bk").map((r) => r.hall)) },
-      { zone: "Туалеты", rostics: avg(filtered.filter((r) => r.brand === "rostics").map((r) => r.wc)), tasty: avg(filtered.filter((r) => r.brand === "tasty").map((r) => r.wc)), bk: avg(filtered.filter((r) => r.brand === "bk").map((r) => r.wc)) },
-      { zone: "Кухня", rostics: avg(filtered.filter((r) => r.brand === "rostics").map((r) => r.kitchen)), tasty: avg(filtered.filter((r) => r.brand === "tasty").map((r) => r.kitchen)), bk: avg(filtered.filter((r) => r.brand === "bk").map((r) => r.kitchen)) },
-      { zone: "Фасад", rostics: avg(filtered.filter((r) => r.brand === "rostics").map((r) => r.facade)), tasty: avg(filtered.filter((r) => r.brand === "tasty").map((r) => r.facade)), bk: avg(filtered.filter((r) => r.brand === "bk").map((r) => r.facade)) },
-    ];
+  const criticalData = useMemo(() => {
+    const counts = new Map();
+    filtered.forEach((record) => record.criticalIssues.forEach((issue) => {
+      counts.set(issue, (counts.get(issue) || 0) + 1);
+    }));
+    return Array.from(counts, ([name, value]) => ({ name, value }))
+      .filter((item) => item.name.toLowerCase() !== "замечаний нет")
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
   }, [filtered]);
 
-  const ranking = useMemo(() => {
-    return currentStats
-      .map((s) => ({ name: s.name, value: s.cleanliness, color: s.color }))
-      .sort((a, b) => b.value - a.value);
-  }, [currentStats]);
+  const brandBlockData = useMemo(() => BLOCKS.map((block) => {
+    const row = { block: block.name };
+    brandKeys.forEach((key) => {
+      row[key] = avg(filtered.filter((record) => record.brand === key).map((record) => record[block.key]));
+    });
+    return row;
+  }), [filtered]);
 
-  const donut = useMemo(() => {
-    return currentStats.map((s) => ({ name: s.name, value: s.checks, color: s.color }));
-  }, [currentStats]);
+  const trendData = useMemo(() => months.map((monthName, index) => {
+    const row = { month: monthShort[index] || monthName };
+    brandKeys.forEach((key) => {
+      const brandRecords = records.filter((record) => record.month === monthName && record.brand === key && matchesBaseFilters(record, false));
+      row[key] = avg(brandRecords.flatMap((record) => BLOCKS.map((block) => record[block.key])));
+    });
+    return row;
+  }), [brand, restaurantId, period, slot, search, months, monthShort, records]);
+
+  const comparisonData = useMemo(() => Object.entries(COMPARISON_LABELS).map(([key, metric]) => {
+    const answers = filtered.map((record) => record.comparison[key]).filter(Boolean);
+    const total = answers.length;
+    const row = { metric };
+    [...brandKeys, "same"].forEach((answer) => {
+      row[answer] = total ? Number(((answers.filter((value) => value === answer).length / total) * 100).toFixed(1)) : 0;
+    });
+    return row;
+  }), [filtered]);
+  const pairedChecks = filtered.filter((record) => record.isPaired).length;
 
   const topRestaurants = useMemo(() => {
     const map = new Map();
-    filtered.forEach((r) => {
-      if (!map.has(r.restaurantId)) map.set(r.restaurantId, { name: r.restaurantName, brand: r.brand, values: [], checks: 0 });
-      map.get(r.restaurantId).values.push(r.cleanliness);
-      map.get(r.restaurantId).checks += r.checks;
+    filtered.forEach((record) => {
+      if (!map.has(record.restaurantId)) {
+        map.set(record.restaurantId, { name: record.restaurantName, brand: record.brand, checks: 0, cleanliness: [], personnel: [], food: [] });
+      }
+      const item = map.get(record.restaurantId);
+      item.checks += 1;
+      BLOCKS.forEach((block) => item[block.key].push(record[block.key]));
     });
     return Array.from(map.values())
-      .map((r) => ({ ...r, avg: avg(r.values) }))
-      .sort((a, b) => b.avg - a.avg)
-      .slice(0, 8);
+      .map((item) => {
+        const result = { ...item };
+        BLOCKS.forEach((block) => { result[block.key] = avg(item[block.key]); });
+        result.total = avg(BLOCKS.map((block) => result[block.key]));
+        return result;
+      })
+      .sort((a, b) => (b.total ?? -1) - (a.total ?? -1))
+      .slice(0, 10);
   }, [filtered]);
 
-  const allAvgCleanliness = avg(filtered.map((r) => r.cleanliness));
-  const allAvgSurvey = avg(filtered.map((r) => r.survey));
-  const allChecks = filtered.reduce((s, r) => s + r.checks, 0);
-  const allRestaurantsCount = new Set(filtered.map((r) => r.restaurantId)).size;
+  const checkShare = useMemo(() => brandKeys.map((key) => ({
+    name: BRANDS[key].name,
+    value: filtered.filter((record) => record.brand === key).length,
+    color: BRANDS[key].color,
+  })).filter((item) => item.value > 0), [filtered]);
 
   const resetFilters = () => {
     setBrand("all");
     setRestaurantId("all");
-    setMonth("май 2024");
+    setMonth("Все месяцы");
     setPeriod("Все периоды");
     setSlot("Все слоты");
     setSearch("");
@@ -481,16 +445,23 @@ export default function RosticsDashboard() {
 
   const filterControls = (
     <>
-      <SearchBox value={search} onChange={setSearch} />
+      <label className="relative min-w-0 flex-1 md:max-w-xs">
+        <div className="mb-1.5 text-xs font-bold text-slate-500">Поиск</div>
+        <Search size={16} className="pointer-events-none absolute left-3 top-[35px] -translate-y-1/2 text-slate-400" />
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Ресторан" className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm font-semibold outline-none focus:border-red-300" />
+      </label>
       <SelectFilter icon={Store} label="Ресторан" value={restaurantId} options={restaurantOptions} onChange={setRestaurantId} wide />
       <SelectFilter icon={CalendarDays} label="Месяц" value={month} options={["Все месяцы", ...months]} onChange={setMonth} />
       <SelectFilter icon={CalendarDays} label="Период" value={period} options={periods} onChange={setPeriod} />
       <SelectFilter icon={Clock3} label="Слот" value={slot} options={slots} onChange={setSlot} />
-      <button onClick={resetFilters} className="flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-500 shadow-sm transition hover:text-red-600">
+      <button onClick={resetFilters} className="flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-500 shadow-sm hover:text-red-600">
         <X size={15} /> Сбросить
       </button>
     </>
   );
+
+  const statusLabel = dataStatus === "ready" ? "База данных" : dataStatus === "loading" ? "Загрузка" : "Ошибка данных";
+  const statusClass = dataStatus === "ready" ? "bg-green-50 text-green-700" : dataStatus === "loading" ? "bg-blue-50 text-blue-700" : "bg-red-50 text-red-700";
 
   return (
     <main className="min-h-screen p-3 sm:p-5" style={{ background: COLORS.page }}>
@@ -498,102 +469,93 @@ export default function RosticsDashboard() {
         <header className="mb-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex items-center gap-4">
-              <LogoBadge brand="rostics" size="large" />
+              <LogoBadge brand="rostics" large />
               <div className="hidden h-14 w-px bg-slate-200 lg:block" />
               <div className="hidden lg:block">
                 <div className="text-sm font-black uppercase tracking-[0.22em] text-red-600">BI Dashboard</div>
-                <div className="text-2xl font-black tracking-tight text-slate-950">Сравнение чистоты, анкетирования и конкурентов</div>
+                <div className="text-2xl font-black tracking-tight text-slate-950">Оценка блоков анкеты</div>
+                <div className="text-sm font-semibold text-slate-500">Последние 3 месяца · анкета {meta.questionnaireId || 278}</div>
               </div>
             </div>
-
-            <button onClick={() => setShowFilters((v) => !v)} className="flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm font-black text-slate-800 xl:hidden">
-              <SlidersHorizontal size={16} /> Фильтры
-            </button>
-          </div>
-
-          <div className="mt-4">
-            <BrandTabs value={brand} onChange={(next) => { setBrand(next); setRestaurantId("all"); }} />
-          </div>
-
-          <div className="mt-4 hidden flex-wrap items-end gap-3 xl:flex">
-            {filterControls}
-          </div>
-
-          {showFilters && (
-            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
-              {filterControls}
+            <div className="flex items-center gap-2">
+              <div className={`rounded-xl px-3 py-2 text-xs font-black ${statusClass}`} title={dataError || "Данные загружены"}>{statusLabel}</div>
+              <button onClick={() => setShowFilters((value) => !value)} className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm font-black text-slate-800 xl:hidden">
+                <SlidersHorizontal size={16} /> Фильтры
+              </button>
             </div>
-          )}
+          </div>
+          <div className="mt-4"><BrandTabs value={brand} onChange={(value) => { setBrand(value); setRestaurantId("all"); }} /></div>
+          <div className="mt-4 hidden flex-wrap items-end gap-3 xl:flex">{filterControls}</div>
+          {showFilters && <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">{filterControls}</div>}
         </header>
 
-        <section className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-6">
-          <KpiCard label="Средняя чистота" value={formatPct(allAvgCleanliness)} brand="all" hint="по фильтрам" delta="" />
-          <KpiCard label="Процент анкет" value={formatPct(allAvgSurvey)} brand="all" hint="по фильтрам" delta="" />
-          <KpiCard label="Всего проверок" value={allChecks.toLocaleString("ru-RU")} brand="all" hint="визитов" delta="" />
-          <KpiCard label="Ресторанов" value={allRestaurantsCount} brand="all" hint="в выборке" delta="" />
-          {currentStats.slice(0, 2).map((s) => (
-            <KpiCard key={s.brand} label="Чистота бренда" value={formatPct(s.cleanliness)} brand={s.brand} hint={s.name} delta={s.cleanliness >= allAvgCleanliness ? "↑ выше ср." : "↓ ниже ср."} />
-          ))}
+        <section className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+          {BLOCKS.map((block) => <KpiCard key={block.key} label={block.name} value={formatPct(blockAverages[block.key])} detail={block.detail} color={COLORS.red} />)}
+          <KpiCard label="Ожидание до 5 минут" value={formatPct(waitUnderFive)} detail={`Вопрос 8 · ${waitAnswered.length} ответов`} color={COLORS.blue} />
+          <KpiCard label="NPS" value={Number.isFinite(currentNps) ? currentNps : "—"} detail="Вопрос 42" color={currentNps >= 0 ? COLORS.green : COLORS.red} />
+          <KpiCard label="Проверки" value={filtered.length.toLocaleString("ru-RU")} detail={months.length ? months.join(" · ") : "Нет данных"} />
         </section>
 
         <section className="mb-5 grid grid-cols-1 gap-5 xl:grid-cols-2">
-          <Card title="Динамика индекса чистоты по неделям (%)">
-            <TrendChart data={trendByWeek} xKey="week" mode="area" />
+          <Card title="Оценка блоков по брендам" subtitle="Чистота: зал и туалет · Персонал: гостеприимство · Еда: блюда">
+            <BrandBlockChart data={brandBlockData} />
           </Card>
-          <Card title="Динамика процента анкет по неделям (%)">
-            <TrendChart data={surveyByWeek} xKey="week" />
+          <Card title="Динамика общей оценки" subtitle="Среднее трех блоков по доступным месяцам">
+            <TrendChart data={trendData} />
           </Card>
         </section>
 
         <section className="mb-5 grid grid-cols-1 gap-5 xl:grid-cols-3">
-          <Card title="Динамика чистоты по месяцам (%)">
-            <TrendChart data={trendByMonth} xKey="month" />
+          <Card title="Длительность ожидания" subtitle="Вопрос 8">
+            <HorizontalBars data={waitData} color={COLORS.blue} height={230} />
           </Card>
-          <Card title="Индекс чистоты по зонам">
-            <BarCompareChart data={zoneData} xKey="zone" />
+          <Card title="Настроение после визита" subtitle="Вопрос 41">
+            <DonutChart data={moodData} />
           </Card>
-          <Card title="Рейтинг брендов по чистоте">
-            <RankingChart data={ranking} />
+          <Card title="Критические недостатки" subtitle="Вопрос 44 · топ упоминаний">
+            <HorizontalBars data={criticalData} color={COLORS.red} percent={false} height={230} />
+          </Card>
+        </section>
+
+        <section className="mb-5">
+          <Card title="Сравнительный анализ" subtitle={`Только парные проверки · ${pairedChecks} анкет · вопросы 48–52`}>
+            <ComparisonChart data={comparisonData} />
           </Card>
         </section>
 
         <section className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-          <Card title="ТОП ресторанов по чистоте" className="xl:col-span-2">
+          <Card title="Рейтинг ресторанов" subtitle="Среднее по чистоте, персоналу и еде" className="xl:col-span-2">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] border-collapse text-sm">
+              <table className="w-full min-w-[780px] border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
-                    <th className="py-3 pr-4">#</th>
-                    <th className="py-3 pr-4">Ресторан</th>
-                    <th className="py-3 pr-4">Бренд</th>
-                    <th className="py-3 pr-4 text-right">Чистота</th>
-                    <th className="py-3 pr-4 text-right">Проверки</th>
+                    <th className="py-3 pr-3">#</th>
+                    <th className="py-3 pr-3">Ресторан</th>
+                    <th className="py-3 pr-3">Бренд</th>
+                    <th className="py-3 pr-3 text-right">Чистота</th>
+                    <th className="py-3 pr-3 text-right">Персонал</th>
+                    <th className="py-3 pr-3 text-right">Еда</th>
+                    <th className="py-3 pr-3 text-right">Итого</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {topRestaurants.map((r, i) => (
-                    <tr key={r.name} className="border-b border-slate-100 last:border-b-0">
-                      <td className="py-3 pr-4 font-black text-slate-400">{i + 1}</td>
-                      <td className="py-3 pr-4 font-bold text-slate-900">{r.name}</td>
-                      <td className="py-3 pr-4">
-                        <div className="flex items-center gap-2 font-bold" style={{ color: BRANDS[r.brand].color }}>
-                          <LogoBadge brand={r.brand} /> {BRANDS[r.brand].name}
-                        </div>
-                      </td>
-                      <td className="py-3 pr-4 text-right font-black" style={{ color: BRANDS[r.brand].color }}>{formatPct(r.avg)}</td>
-                      <td className="py-3 pr-4 text-right font-bold text-slate-600">{r.checks}</td>
+                  {topRestaurants.map((item, index) => (
+                    <tr key={`${item.brand}-${item.name}`} className="border-b border-slate-100 last:border-0">
+                      <td className="py-3 pr-3 font-black text-slate-400">{index + 1}</td>
+                      <td className="py-3 pr-3 font-bold text-slate-900">{item.name}</td>
+                      <td className="py-3 pr-3"><div className="flex items-center gap-2 font-bold" style={{ color: BRANDS[item.brand].color }}><LogoBadge brand={item.brand} />{BRANDS[item.brand].name}</div></td>
+                      <td className="py-3 pr-3 text-right font-bold">{formatPct(item.cleanliness)}</td>
+                      <td className="py-3 pr-3 text-right font-bold">{formatPct(item.personnel)}</td>
+                      <td className="py-3 pr-3 text-right font-bold">{formatPct(item.food)}</td>
+                      <td className="py-3 pr-3 text-right font-black" style={{ color: BRANDS[item.brand].color }}>{formatPct(item.total)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           </Card>
-
-          <Card title="Доля проверок по брендам">
-            <DonutChart data={donut} />
-            <div className="mt-2 rounded-2xl bg-slate-50 p-4 text-sm font-bold text-slate-600">
-              Все графики, KPI и таблица пересчитываются при изменении бренда, ресторана, месяца, периода и слота.
-            </div>
+          <Card title="Доля проверок по брендам" subtitle="По текущим фильтрам">
+            <DonutChart data={checkShare} />
           </Card>
         </section>
       </div>
