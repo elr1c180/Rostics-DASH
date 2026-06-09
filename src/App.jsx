@@ -112,6 +112,7 @@ function createMockDashboardData() {
           week: `${visit + 1} нед`,
           period: visit % 3 === 0 ? "Выходные" : "Будни",
           slot: slots[(visit % 3) + 1],
+          visitHour: [10.5, 13.5, 16, 19.5][visit],
           cleanliness: Number(mockNumber(seed + 1, 52 + brandBoost, 82 + brandBoost).toFixed(1)),
           personnel: Number(mockNumber(seed + 2, 66 + brandBoost, 91 + brandBoost).toFixed(1)),
           food: Number(mockNumber(seed + 3, 82 + brandBoost, 99).toFixed(1)),
@@ -168,6 +169,7 @@ function normalizeDashboardData(data) {
           personnel: record.personnel == null ? null : Number(record.personnel),
           food: record.food == null ? null : Number(record.food),
           npsScore: record.npsScore == null ? null : Number(record.npsScore),
+          visitHour: record.visitHour == null ? null : Number(record.visitHour),
           criticalIssues: Array.isArray(record.criticalIssues)
             ? record.criticalIssues.map((issue) => String(issue || "")).filter(Boolean)
             : [],
@@ -192,12 +194,43 @@ function formatPct(value) {
   return Number.isFinite(value) ? `${value.toFixed(1)}%` : "—";
 }
 
-function nps(values) {
-  const valid = values.filter((value) => Number.isFinite(value) && value >= 1 && value <= 10);
-  if (!valid.length) return null;
-  const promoters = valid.filter((value) => value >= 9).length;
-  const detractors = valid.filter((value) => value <= 6).length;
-  return Math.round(((promoters - detractors) / valid.length) * 100);
+function pearsonCorrelation(pairs) {
+  const valid = pairs.filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
+  if (valid.length < 3) return null;
+
+  const meanX = valid.reduce((sum, [x]) => sum + x, 0) / valid.length;
+  const meanY = valid.reduce((sum, [, y]) => sum + y, 0) / valid.length;
+  let numerator = 0;
+  let varianceX = 0;
+  let varianceY = 0;
+
+  valid.forEach(([x, y]) => {
+    const dx = x - meanX;
+    const dy = y - meanY;
+    numerator += dx * dy;
+    varianceX += dx ** 2;
+    varianceY += dy ** 2;
+  });
+
+  const denominator = Math.sqrt(varianceX * varianceY);
+  return denominator ? numerator / denominator : null;
+}
+
+function moodScore(mood = "") {
+  const value = String(mood).toLowerCase();
+  if (value.includes("полож")) return 1;
+  if (value.includes("нейтр")) return 0;
+  if (value.includes("негат")) return -1;
+  return null;
+}
+
+function correlationColor(value) {
+  if (!Number.isFinite(value)) return "#F8FAFC";
+  const strength = Math.min(1, Math.abs(value));
+  const target = value < 0 ? [239, 68, 68] : [34, 197, 94];
+  const neutral = [254, 243, 199];
+  const rgb = neutral.map((channel, index) => Math.round(channel + (target[index] - channel) * strength));
+  return `rgb(${rgb.join(",")})`;
 }
 
 function LogoBadge({ brand, large = false }) {
@@ -374,6 +407,46 @@ function DonutChart({ data }) {
   );
 }
 
+function CorrelationMatrix({ rows, sampleSize }) {
+  return (
+    <div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[850px] border-separate border-spacing-1 text-sm">
+          <thead>
+            <tr>
+              <th className="rounded-lg bg-slate-100 px-3 py-2 text-left font-black text-slate-700">Фактор времени</th>
+              {rows[0]?.values.map((item) => (
+                <th key={item.key} className="rounded-lg bg-slate-100 px-3 py-2 text-center font-black text-slate-700">{item.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.key}>
+                <th className="rounded-lg bg-slate-50 px-3 py-3 text-left font-black text-slate-900">{row.label}</th>
+                {row.values.map((item) => (
+                  <td
+                    key={item.key}
+                    className="rounded-lg px-3 py-3 text-center font-black text-slate-900"
+                    style={{ background: correlationColor(item.value) }}
+                    title={Number.isFinite(item.value) ? `r = ${item.value.toFixed(3)}` : "Недостаточно данных"}
+                  >
+                    {Number.isFinite(item.value) ? `${item.value >= 0 ? "+" : ""}${Math.round(item.value * 100)}%` : "—"}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs font-semibold text-slate-500">
+        <span>Выборка: {sampleSize} проверок. «Возвращение» = положительное настроение с желанием вернуться.</span>
+        <span>Красный: обратная связь · желтый: связи почти нет · зеленый: прямая связь</span>
+      </div>
+    </div>
+  );
+}
+
 export default function RosticsDashboard() {
   const [dashboardData, setDashboardData] = useState(emptyDashboardData);
   const [dataStatus, setDataStatus] = useState("loading");
@@ -435,7 +508,12 @@ export default function RosticsDashboard() {
   const waitUnderFive = waitAnswered.length
     ? (waitAnswered.filter((record) => record.wait.toLowerCase().includes("до 5")).length / waitAnswered.length) * 100
     : null;
-  const currentNps = nps(filtered.map((record) => record.npsScore));
+  const criticalAnswered = filtered.filter((record) => record.criticalIssues.length);
+  const noCriticalIssues = criticalAnswered.length
+    ? (criticalAnswered.filter((record) =>
+        record.criticalIssues.some((issue) => issue.toLowerCase().includes("замечаний нет")),
+      ).length / criticalAnswered.length) * 100
+    : null;
 
   const moodData = useMemo(() => {
     const counts = { positive: 0, neutral: 0, negative: 0 };
@@ -503,6 +581,32 @@ export default function RosticsDashboard() {
     return row;
   }), [filtered]);
   const pairedChecks = filtered.filter((record) => record.isPaired).length;
+
+  const correlationRows = useMemo(() => {
+    const factors = [
+      { key: "visitHour", label: "Время визита", value: (record) => record.visitHour },
+      { key: "peak", label: "Час-пик", value: (record) => record.slot === "Час-пик" ? 1 : 0 },
+      { key: "weekend", label: "Выходной", value: (record) => record.period === "Выходные" ? 1 : 0 },
+    ];
+    const outcomes = [
+      { key: "cleanliness", label: "Чистота", value: (record) => record.cleanliness },
+      { key: "personnel", label: "Персонал", value: (record) => record.personnel },
+      { key: "food", label: "Еда", value: (record) => record.food },
+      { key: "mood", label: "Настроение", value: (record) => moodScore(record.mood) },
+      { key: "nps", label: "NPS", value: (record) => record.npsScore },
+      { key: "return", label: "Возвращение", value: (record) => record.mood.toLowerCase().includes("хочется вернуться") ? 1 : 0 },
+    ];
+
+    return factors.map((factor) => ({
+      key: factor.key,
+      label: factor.label,
+      values: outcomes.map((outcome) => ({
+        key: outcome.key,
+        label: outcome.label,
+        value: pearsonCorrelation(filtered.map((record) => [factor.value(record), outcome.value(record)])),
+      })),
+    }));
+  }, [filtered]);
 
   const topRestaurants = useMemo(() => {
     const map = new Map();
@@ -593,7 +697,7 @@ export default function RosticsDashboard() {
         <section className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
           {BLOCKS.map((block) => <KpiCard key={block.key} label={block.name} value={formatPct(blockAverages[block.key])} detail={block.detail} color={COLORS.red} />)}
           <KpiCard label="Ожидание до 5 минут" value={formatPct(waitUnderFive)} detail={`Вопрос 8 · ${waitAnswered.length} ответов`} color={COLORS.blue} />
-          <KpiCard label="NPS" value={Number.isFinite(currentNps) ? currentNps : "—"} detail="Вопрос 42" color={currentNps >= 0 ? COLORS.green : COLORS.red} />
+          <KpiCard label="Без критических недостатков" value={formatPct(noCriticalIssues)} detail="Вопрос 44" color={COLORS.green} />
           <KpiCard label="Проверки" value={filtered.length.toLocaleString("ru-RU")} detail={months.length ? months.join(" · ") : "Нет данных"} />
         </section>
 
@@ -621,6 +725,15 @@ export default function RosticsDashboard() {
         <section className="mb-5">
           <Card title="Сравнительный анализ" subtitle={`Только парные проверки · ${pairedChecks} анкет · вопросы 48–52`}>
             <ComparisonChart data={comparisonData} />
+          </Card>
+        </section>
+
+        <section className="mb-5">
+          <Card title="Корреляция показателей со временем визита" subtitle="Коэффициент Пирсона: связь времени посещения и оценки сервиса">
+            <CorrelationMatrix rows={correlationRows} sampleSize={filtered.length} />
+            <div className="mt-3 rounded-xl bg-slate-50 p-3 text-xs font-semibold leading-relaxed text-slate-600">
+              Интерпретация: до ±10% — связи почти нет, 10–30% — слабая, 30–50% — умеренная, 50–70% — заметная, выше 70% — сильная. Корреляция показывает совместное изменение показателей, но не доказывает причинность.
+            </div>
           </Card>
         </section>
 

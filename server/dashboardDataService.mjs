@@ -4,7 +4,7 @@ import { withDatabase } from "./dbConnection.mjs";
 
 export const DASHBOARD_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const DASHBOARD_QUERY_TIMEOUT_MS = 60 * 1000;
-const DASHBOARD_CACHE_PATH = path.join(".cache", "dashboard-data-v2.json");
+const DASHBOARD_CACHE_PATH = path.join(".cache", "dashboard-data-v3.json");
 const QUESTIONNAIRE_ID = 278;
 const BLOCKS = {
   cleanliness: { sectionId: 1129, subSectionIds: new Set([508, 509]) },
@@ -120,12 +120,20 @@ function periodFrom(date, answer = "") {
 }
 
 function slotFrom(timeAnswer = "") {
-  const match = String(timeAnswer).match(/(\d{1,2})[:.](\d{2})/);
-  if (!match) return "Все слоты";
-  const hour = Number(match[1]);
+  const hour = hourFrom(timeAnswer);
+  if (hour === null) return "Все слоты";
   if (hour < 12) return "Утро";
   if (hour < 17) return "Час-пик";
   return "Вечер";
+}
+
+function hourFrom(timeAnswer = "") {
+  const match = String(timeAnswer).match(/(\d{1,2})[:.](\d{2})/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) return null;
+  return Number((hour + minute / 60).toFixed(2));
 }
 
 function applyAnswerFact(target, row) {
@@ -229,6 +237,7 @@ function buildDashboardData(rows) {
       week: weekOfMonth(date),
       period: periodFrom(date, task.answers.day),
       slot: slotFrom(task.answers.time),
+      visitHour: hourFrom(task.answers.time),
       cleanliness: blockValues.cleanliness,
       personnel: blockValues.personnel,
       food: blockValues.food,
